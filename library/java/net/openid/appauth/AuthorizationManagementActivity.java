@@ -256,6 +256,12 @@ public class AuthorizationManagementActivity extends Activity {
 
     private void handleAuthorizationComplete() {
         Uri responseUri = getIntent().getData();
+
+        if(responseUri != null){
+            String reformattedUrl = responseUri.toString().replace("#", "?");
+            responseUri = Uri.parse(reformattedUrl);
+        }
+        
         Intent responseData = extractResponseData(responseUri);
         if (responseData == null) {
             Logger.error("Failed to extract OAuth2 response from redirect");
