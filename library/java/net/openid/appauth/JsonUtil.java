@@ -17,8 +17,8 @@ package net.openid.appauth;
 import static net.openid.appauth.Preconditions.checkNotNull;
 
 import android.net.Uri;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -307,6 +307,21 @@ final class JsonUtil {
             stringMap.put(key, value);
         }
         return stringMap;
+    }
+
+    public static JSONObject getJsonObjectIfDefined(@NonNull JSONObject json,
+            @NonNull String field) throws JSONException {
+        checkNotNull(json, "json must not be null");
+        checkNotNull(field, "field must not be null");
+        if (!json.has(field)) {
+            return null;
+        }
+
+        JSONObject value = json.optJSONObject(field);
+        if (value == null) {
+            throw new JSONException("field \"" + field + "\" is mapped to a null value");
+        }
+        return value;
     }
 
     @NonNull

@@ -1,6 +1,6 @@
 package net.openid.appauth;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.util.Base64;
 
 import java.util.Arrays;
@@ -18,6 +18,7 @@ import org.robolectric.annotation.Config;
 
 import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_AUTHORIZATION_ENDPOINT;
 import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_CLAIMS_SUPPORTED;
+import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_END_SESSION_ENDPOINT;
 import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_ID_TOKEN_SIGNING_ALG_VALUES;
 import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_JWKS_URI;
 import static net.openid.appauth.AuthorizationServiceDiscoveryTest.TEST_REGISTRATION_ENDPOINT;
@@ -35,12 +36,13 @@ import static net.openid.appauth.TestValues.TEST_ISSUER;
 import static net.openid.appauth.TestValues.TEST_NONCE;
 import static net.openid.appauth.TestValues.getDiscoveryDocumentJson;
 import static net.openid.appauth.TestValues.getTestAuthCodeExchangeRequestBuilder;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+
 
 @RunWith(RobolectricTestRunner.class)
-@Config(constants = BuildConfig.class, sdk=16)
+@Config(sdk=16)
 public class IdTokenTest {
 
     static final String TEST_SUBJECT = "SUBJ3CT";
@@ -155,6 +157,23 @@ public class IdTokenTest {
         idToken.validate(tokenRequest, clock);
     }
 
+    @Test
+    public void testValidate_withoutNonce() throws AuthorizationException {
+        Long nowInSeconds = SystemClock.INSTANCE.getCurrentTimeMillis() / 1000;
+        Long tenMinutesInSeconds = (long) (10 * 60);
+        IdToken idToken = new IdToken(
+            TEST_ISSUER,
+            TEST_SUBJECT,
+            Collections.singletonList(TEST_CLIENT_ID),
+            nowInSeconds + tenMinutesInSeconds,
+            nowInSeconds,
+            null
+        );
+        TokenRequest tokenRequest = getTestAuthCodeExchangeRequestBuilder().build();
+        Clock clock = SystemClock.INSTANCE;
+        idToken.validate(tokenRequest, clock);
+    }
+
     @Test(expected = AuthorizationException.class)
     public void testValidate_shouldFailOnIssuerMismatch() throws AuthorizationException {
         Long nowInSeconds = SystemClock.INSTANCE.getCurrentTimeMillis() / 1000;
@@ -199,6 +218,36 @@ public class IdTokenTest {
             .build();
         Clock clock = SystemClock.INSTANCE;
         idToken.validate(tokenRequest, clock);
+    }
+
+    @Test
+    public void testValidate_shouldSkipNonHttpsIssuer()
+        throws AuthorizationException, JSONException, MissingArgumentException {
+        Long nowInSeconds = SystemClock.INSTANCE.getCurrentTimeMillis() / 1000;
+        Long tenMinutesInSeconds = (long) (10 * 60);
+        IdToken idToken = new IdToken(
+            "http://other.issuer",
+            TEST_SUBJECT,
+            Collections.singletonList(TEST_CLIENT_ID),
+            nowInSeconds + tenMinutesInSeconds,
+            nowInSeconds,
+            TEST_NONCE
+        );
+
+        String serviceDocJsonWithOtherIssuer = getDiscoveryDocJsonWithIssuer("http://other.issuer");
+        AuthorizationServiceDiscovery discoveryDoc = new AuthorizationServiceDiscovery(
+            new JSONObject(serviceDocJsonWithOtherIssuer));
+        AuthorizationServiceConfiguration serviceConfiguration =
+            new AuthorizationServiceConfiguration(discoveryDoc);
+        TokenRequest tokenRequest = new TokenRequest.Builder(serviceConfiguration, TEST_CLIENT_ID)
+            .setAuthorizationCode(TEST_AUTH_CODE)
+            .setCodeVerifier(TEST_CODE_VERIFIER)
+            .setGrantType(GrantTypeValues.AUTHORIZATION_CODE)
+            .setRedirectUri(TEST_APP_REDIRECT_URI)
+            .setNonce(TEST_NONCE)
+            .build();
+        Clock clock = SystemClock.INSTANCE;
+        idToken.validate(tokenRequest, clock, true);
     }
 
     @Test(expected = AuthorizationException.class)
@@ -369,6 +418,7 @@ public class IdTokenTest {
             TEST_TOKEN_ENDPOINT,
             TEST_USERINFO_ENDPOINT,
             TEST_REGISTRATION_ENDPOINT,
+            TEST_END_SESSION_ENDPOINT,
             TEST_JWKS_URI,
             TEST_RESPONSE_TYPES_SUPPORTED,
             TEST_SUBJECT_TYPES_SUPPORTED,
